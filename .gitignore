@@ -1,3 +1,10 @@
+target
+classes
+.settings
+.metadata
+.project
+.classpath
+
 *.class
 
 # Package Files #
