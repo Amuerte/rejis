@@ -1,5 +1,7 @@
 package redis.clients.rejis;
 
+import org.apache.commons.lang.StringUtils;
+
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
@@ -15,16 +17,33 @@ public class SimpleJedisTemplate extends AbstractJedisTemplate<Jedis, Jedis> {
      * Client Redis mono-instance (1 seul master utilisé pour la lecture et
      * l'ecriture).
      * 
-     * @param jedisPoolConfig
-     * @param masterIP
-     * @param masterPort
+     * @param pool
      */
-    public SimpleJedisTemplate(JedisPoolConfig jedisPoolConfig, String masterIP, int masterPort) {
-        Pool<Jedis> pool = new JedisPool(jedisPoolConfig, masterIP, masterPort);
+    public SimpleJedisTemplate(Pool<Jedis> pool) {
         this.setWritePool(pool);
         this.setReadPool(pool);
     }
 
+    /**
+     * Client Redis mono-instance (1 seul master utilisé pour la lecture et
+     * l'ecriture).
+     * 
+     * @param jedisPoolConfig
+     * @param masterIP
+     * @param masterPort
+     * @param password
+     */
+    public SimpleJedisTemplate(JedisPoolConfig jedisPoolConfig, String masterIP, int masterPort, String password) {
+        Pool<Jedis> masterPool = null;
+        if (!StringUtils.isEmpty(password)) {
+            masterPool = new JedisPool(jedisPoolConfig, masterIP, masterPort, 2000, password);
+        } else {
+            masterPool = new JedisPool(jedisPoolConfig, masterIP, masterPort);
+        }
+
+        this.setWritePool(masterPool);
+        this.setReadPool(masterPool);
+    }
 
     @Override
     public Long del(final String... keys) {

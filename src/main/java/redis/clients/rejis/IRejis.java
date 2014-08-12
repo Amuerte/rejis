@@ -13,4 +13,6 @@ public interface IRejis {
     Boolean exists(String key);
 
     void destroyPools();
+
+    Long expire(String key, int timeout);
 }

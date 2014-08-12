@@ -16,8 +16,6 @@ import org.junit.Test;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.rejis.JedisCallback;
-import redis.clients.rejis.RoundRobinJedisTemplate;
 import redis.clients.util.Pool;
 
 @SuppressWarnings("unchecked")

@@ -3,6 +3,7 @@ package redis.clients.rejis;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.pool.BasePoolableObjectFactory;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
@@ -17,56 +18,47 @@ import redis.clients.util.Pool;
  * https://gist.github.com/ib84/1084272
  */
 public class RoundRobinPool extends Pool<Jedis> {
-    private GenericObjectPool internalPool;
+    private GenericObjectPool jedisClientPool;
+    private RoundRobinFactory factory;
 
-    public RoundRobinPool(final GenericObjectPool.Config poolConfig, String masterIP, int masterPort, String masterPassword, List<JedisShardInfo> shards) {
+    public RoundRobinPool(final GenericObjectPool.Config poolConfig, List<JedisShardInfo> shards) {
         super(poolConfig, null);
-        this.internalPool = new GenericObjectPool(new RoundRobinFactory(shards, masterIP, masterPort, masterPassword), poolConfig);
-        internalPool.setLifo(false);
-        internalPool.setMaxWait(100);
+        this.factory = new RoundRobinFactory(shards);
+        jedisClientPool = new GenericObjectPool(factory, poolConfig);
+        jedisClientPool.setLifo(false);
+
         initializePool();
     }
-
 
     public RoundRobinPool(final GenericObjectPool.Config poolConfig, PoolableObjectFactory factory) {
         super(poolConfig, factory);
     }
 
     private void initializePool() {
-        for (int i = RoundRobinFactory.shards.size(); i > 0; i--)
+        for (int i = factory.getNbShards(); i > 0; i--) {
             try {
-                internalPool.addObject();
+                jedisClientPool.addObject();
             } catch (Exception e) {
-                e.printStackTrace();
+                throw new IllegalStateException("Pb initialisation pool jedis", e);
             }
-    }
-
-    public void addSlaveToRoundRobin(JedisShardInfo... jsi) throws Exception {
-        for (JedisShardInfo i : jsi) {
-            RoundRobinFactory.makeSlaveOfMaster(i, RoundRobinFactory.masterIP, RoundRobinFactory.masterPort, RoundRobinFactory.masterPassword);
-            RoundRobinFactory.shards.add(i);
         }
-        RoundRobinFactory.shardIterator = RoundRobinFactory.shards.iterator();
-        // internalPool.addObject();
-        initializePool();
     }
 
     public void setWhenExhaustedGrow(boolean whenExhaustedGrow) {
-        this.internalPool.setWhenExhaustedAction(GenericObjectPool.WHEN_EXHAUSTED_GROW);
+        this.jedisClientPool.setWhenExhaustedAction(GenericObjectPool.WHEN_EXHAUSTED_GROW);
     }
 
     public void setMinIdle(int minIdle) {
-        internalPool.setMinIdle(minIdle);
+        jedisClientPool.setMinIdle(minIdle);
     }
 
     public void setMaxIdle(int maxIdle) {
-        internalPool.setMaxIdle(maxIdle);
+        jedisClientPool.setMaxIdle(maxIdle);
     }
 
-    @SuppressWarnings("unchecked")
     public Jedis getResource() {
         try {
-            return (Jedis) internalPool.borrowObject();
+            return (Jedis) jedisClientPool.borrowObject();
         } catch (Exception e) {
             throw new JedisConnectionException("Could not get a resource from the pool", e);
         }
@@ -74,7 +66,7 @@ public class RoundRobinPool extends Pool<Jedis> {
 
     public RoundRobinPool chainGetResource(Jedis result) {
         try {
-            result = (Jedis) internalPool.borrowObject();
+            result = (Jedis) jedisClientPool.borrowObject();
         } catch (Exception e) {
             throw new JedisConnectionException("Could not get a resource from the pool", e);
         }
@@ -83,7 +75,7 @@ public class RoundRobinPool extends Pool<Jedis> {
 
     public void returnResource(final Jedis resource) {
         try {
-            internalPool.returnObject(resource);
+            jedisClientPool.returnObject(resource);
         } catch (Exception e) {
             throw new JedisException("Could not return the resource to the pool", e);
         }
@@ -91,7 +83,7 @@ public class RoundRobinPool extends Pool<Jedis> {
 
     public void chainReturnResource(final Jedis resource, Pool pool) {
         try {
-            internalPool.returnObject(resource);
+            jedisClientPool.returnObject(resource);
         } catch (Exception e) {
             throw new JedisException("Could not return the resource to the pool", e);
         }
@@ -99,7 +91,7 @@ public class RoundRobinPool extends Pool<Jedis> {
 
     public void returnBrokenResource(final Jedis resource) {
         try {
-            internalPool.invalidateObject(resource);
+            jedisClientPool.invalidateObject(resource);
         } catch (Exception e) {
             throw new JedisException("Could not return the resource to the pool", e);
         }
@@ -107,66 +99,52 @@ public class RoundRobinPool extends Pool<Jedis> {
 
     public void destroy() {
         try {
-            internalPool.close();
+            jedisClientPool.close();
         } catch (Exception e) {
             throw new JedisException("Could not destroy the pool", e);
         }
     }
 
     public void setTestOnBorrow(boolean stob) {
-        internalPool.setTestOnBorrow(stob);
+        jedisClientPool.setTestOnBorrow(stob);
     }
 
     public void setTestOnReturn(boolean stor) {
-        internalPool.setTestOnReturn(stor);
+        jedisClientPool.setTestOnReturn(stor);
     }
 
+    /**
+     * Factory du pool
+     */
+
     private static class RoundRobinFactory extends BasePoolableObjectFactory {
-        private static List<JedisShardInfo> shards; // TODO - have checked if
-                                                    // setting these 2 fields
-                                                    // static is ok
-        private static Iterator<JedisShardInfo> shardIterator;
-        private static String masterIP;
-        private static int masterPort;
-        private static String masterPassword;
+        private List<JedisShardInfo> shards;
+        private Iterator<JedisShardInfo> shardIterator;
 
-        public void addSlave(JedisShardInfo jsi) {
-            shards.add(jsi);
-            shardIterator = shards.iterator();
-        }
-
-
-        public RoundRobinFactory(List<JedisShardInfo> shards, String masterIP, int masterPort, String masterPassword) {
+        public RoundRobinFactory(List<JedisShardInfo> shards) {
             this.shards = shards;
-            this.masterIP = masterIP;
-            this.masterPort = masterPort;
-            this.masterPassword = masterPassword;
-
-            for (JedisShardInfo jsi : shards)
-                makeSlaveOfMaster(jsi, masterIP, masterPort, masterPassword);
-
             this.shardIterator = this.shards.iterator();
-        }
-
-        public static void makeSlaveOfMaster(JedisShardInfo s, String masterIP, int masterPort, String masterPasswort) {
-            Jedis temp = s.createResource();
-            temp.connect();
-            temp.auth(masterPasswort);
-            temp.slaveof(masterIP, masterPort);
-            temp.disconnect();
         }
 
         public Object makeObject() throws Exception {
             JedisShardInfo jsi = null;
-            if (shardIterator.hasNext())
+            if (shardIterator.hasNext()) {
                 jsi = (JedisShardInfo) shardIterator.next();
-            else {
-                shardIterator = this.shards.iterator();
+            } else {
+                resetShardsIterator();
                 if (shardIterator.hasNext()) {
                     jsi = (JedisShardInfo) shardIterator.next();
                 }
             }
-            return new Jedis(jsi.getHost(), jsi.getPort());
+            
+            Jedis jedis = new Jedis(jsi.getHost(), jsi.getPort());
+            jedis.connect();
+
+            if (!StringUtils.isEmpty(jsi.getPassword())) {
+                jedis.auth(jsi.getPassword());
+            }
+
+            return jedis;
         }
 
         public void destroyObject(final Object obj) throws Exception {
@@ -193,6 +171,14 @@ public class RoundRobinPool extends Pool<Jedis> {
             } catch (Exception ex) {
                 return false;
             }
+        }
+
+        public int getNbShards() {
+            return shards.size();
+        }
+
+        public void resetShardsIterator() {
+            shardIterator = shards.iterator();
         }
     }
 }

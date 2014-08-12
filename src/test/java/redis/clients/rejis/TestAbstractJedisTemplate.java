@@ -19,8 +19,6 @@ import org.junit.Test;
 import redis.clients.jedis.BinaryJedisCommands;
 import redis.clients.jedis.JedisCommands;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.rejis.AbstractJedisTemplate;
-import redis.clients.rejis.JedisCallback;
 import redis.clients.util.Pool;
 
 @SuppressWarnings("unchecked")
@@ -284,6 +282,39 @@ public class TestAbstractJedisTemplate implements IJedisTestConstants {
 
         // when
         spyJedisTemplate.exists(KEY);
+
+        // then
+        verify(spyJedisTemplate);
+    }
+
+    @Test
+    public void testMethod_Expire_Callback() throws Exception {
+        // given
+        final int timeout = 100;
+        expect(writePool.getResource()).andReturn(mockJedis).once();
+        writePool.returnResource(mockJedis);
+        expectLastCall();
+
+        expect(mockJedis.expire(KEY, timeout)).andReturn(JEDIS_LONG_OK).once();
+        replayAll();
+
+        // when
+        long retour = jedis.expire(KEY, timeout);
+
+        // then
+        assertThat(retour, is(JEDIS_LONG_OK));
+        verifyAll();
+    }
+
+    @Test
+    public void testMethod_Expire_callDoPut() throws Exception {
+        // given
+        JedisTemplateTest spyJedisTemplate = createSpyJedisTemplate();
+        expect(spyJedisTemplate.doPut(anyObject(JedisCallback.class))).andReturn(JEDIS_LONG_OK).once();
+        replay(spyJedisTemplate);
+
+        // when
+        spyJedisTemplate.expire(KEY, 100);
 
         // then
         verify(spyJedisTemplate);

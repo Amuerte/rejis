@@ -19,8 +19,6 @@ import org.junit.Test;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.rejis.JedisCallback;
-import redis.clients.rejis.SimpleJedisTemplate;
 import redis.clients.util.Pool;
 
 @SuppressWarnings("unchecked")
@@ -55,7 +53,7 @@ public class TestSimpleJedisTemplate implements IJedisTestConstants {
 
     @Test
     public void testSimpleMasterMode() throws Exception {
-        jedis = new SimpleJedisTemplate(new JedisPoolConfig(), null, 0);
+        jedis = new SimpleJedisTemplate(new JedisPoolConfig(), "127.0.0.1", 6379, null);
 
         assertThat(jedis.getWritePool(), is(jedis.getReadPool()));
     }

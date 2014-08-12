@@ -18,8 +18,8 @@ public class RoundRobinJedisTemplate extends SimpleJedisTemplate {
     }
 
     public RoundRobinJedisTemplate(JedisPoolConfig jedisPoolConfig, String masterIP, int masterPort, String password, List<JedisShardInfo> shards) {
-        super(jedisPoolConfig, masterIP, masterPort);
-        setReadPool(new RoundRobinPool(new JedisPoolConfig(), masterIP, masterPort, password, shards));
+        super(jedisPoolConfig, masterIP, masterPort, password);
+        setReadPool(new RoundRobinPool(new JedisPoolConfig(), shards));
         setRedundancyFactor(shards.size());
     }
 

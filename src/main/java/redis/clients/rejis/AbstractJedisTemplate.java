@@ -46,13 +46,22 @@ public abstract class AbstractJedisTemplate<R extends BinaryJedisCommands & Jedi
         });
     }
 
-
     @Override
     public Boolean exists(final String key) {
         return doGet(new JedisCallback<R, Boolean>() {
             @Override
             public Boolean doJedisAction(R jedis) {
                 return jedis.exists(key);
+            }
+        });
+    }
+
+    @Override
+    public Long expire(final String key, final int timeout) {
+        return doPut(new JedisCallback<W, Long>() {
+            @Override
+            public Long doJedisAction(W jedis) {
+                return jedis.expire(key, timeout);
             }
         });
     }

@@ -7,6 +7,7 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
 import redis.clients.jedis.JedisShardInfo;
 import redis.clients.jedis.ShardedJedis;
+import redis.clients.jedis.ShardedJedisPool;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.util.Pool;
 
@@ -14,7 +15,7 @@ public class MixedShardedJedisTemplate extends AbstractJedisTemplate<ShardedJedi
 
     public MixedShardedJedisTemplate(JedisPoolConfig jedisPoolConfig, String masterIP, int masterPort, String password, List<JedisShardInfo> shards) {
         this.setWritePool(new JedisPool(jedisPoolConfig, masterIP, masterPort));
-        this.setReadPool(new ShardedSlavedJedisPool(new JedisPoolConfig(), shards));
+        this.setReadPool(new ShardedJedisPool(jedisPoolConfig, shards));
     }
 
     public Long del(final String... keys) {
